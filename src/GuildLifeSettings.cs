@@ -53,5 +53,14 @@ namespace ErenshorGuildLife
 
         [Config("RecordRosterChanges", "Guild", "Record verified same-guild roster joins/leaves in the local bulletin.")]
         public bool RecordRosterChanges = true;
+
+        [Config("LivingGuildEnabled", "Living Guild", "Enable bounded deterministic Guild Life activities. These are mod-owned activities and never grant native Erenshor XP, items, resources, or movement.")]
+        public bool LivingGuildEnabled = true;
+
+        [Config("ActivityIntervalSeconds", "Living Guild", "Base interval between new deterministic guild activities, clamped to 30-600 seconds.")]
+        public int ActivityIntervalSeconds = 75;
+
+        [Config("MaxConcurrentActivities", "Living Guild", "Maximum simultaneous deterministic guild activities, clamped to 1-4.")]
+        public int MaxConcurrentActivities = 2;
     }
 }

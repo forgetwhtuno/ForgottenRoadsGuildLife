@@ -16,7 +16,9 @@ $out = Join-Path $env:TEMP "ErenshorGuildLifeCoreTests.exe"
 & $csc /nologo /target:exe /out:$out `
     (Join-Path $ScriptRoot "src\GuildModels.cs") `
     (Join-Path $ScriptRoot "src\GuildLifeCore.cs") `
+    (Join-Path $ScriptRoot "src\GuildActivityEngine.cs") `
     (Join-Path $ScriptRoot "src\GuildStore.cs") `
+    (Join-Path $ScriptRoot "src\OptionalJournalBridge.cs") `
     (Join-Path $ScriptRoot "tests\GuildLifeCoreTests.cs")
 if ($LASTEXITCODE -ne 0) { throw "Guild Life core tests did not compile." }
 & $out
@@ -65,6 +67,30 @@ foreach ($pattern in @('HarmonyPrefix', 'HarmonyTranspiler', 'HarmonyFinalizer',
 if ($guildSource -match 'LunarisPermission\.Network') { throw "Read-only boundary test failed: Guild Life requests network permission." }
 Write-Host "PASS: Guild Life read-only authority source guard"
 
+# Living-guild provenance/optional-integration contract. The deterministic activity stream is
+# mod-owned and separate from the externally verified Bulletin; Deep Sims/Journal must remain optional.
+if ($guildSource -match 'using\s+(DeepSims|ErenshorJournal)' -or $guildSource -match 'LunarisPermission\.Network') {
+    throw "Guild Life optional-integration guard failed: hard AI/Journal/network dependency found."
+}
+$activityApiSource = Get-Content (Join-Path $ScriptRoot "src\GuildLifeApi.cs") -Raw
+if ($activityApiSource -notmatch 'ActivityContractVersion\s*=\s*1' -or
+    $activityApiSource -notmatch 'GetCurrentActivities' -or
+    $activityApiSource -notmatch 'GetActivityEventsAfter' -or
+    $activityApiSource -notmatch 'OldestActivityEventSequence' -or
+    $activityApiSource -notmatch 'GetOpenOpportunities' -or
+    $activityApiSource -notmatch 'GetRelationships') {
+    throw "Guild Life living-activity API contract is incomplete."
+}
+$activityEngineSource = Get-Content (Join-Path $ScriptRoot "src\GuildActivityEngine.cs") -Raw
+if ($activityEngineSource -match 'GameData|SimPlayer|UnityEngine|Harmony|Lunaris') {
+    throw "Guild Life deterministic activity core reached into game/loader APIs."
+}
+$livingPluginSource = Get-Content (Join-Path $ScriptRoot "src\ErenshorGuildLifePlugin.cs") -Raw
+if ($livingPluginSource -match 'AppendBulletin\([^\)]*"Guild Life"') {
+    throw "Guild Life provenance guard failed: deterministic activity output was mixed into the verified Bulletin."
+}
+Write-Host "PASS: Guild Life living-activity provenance/optional-integration guard"
+
 $readerSource = Get-Content (Join-Path $ScriptRoot "src\GuildReader.cs") -Raw
 $pluginSource = Get-Content (Join-Path $ScriptRoot "src\ErenshorGuildLifePlugin.cs") -Raw
 if ($readerSource -match 'gameObject\.name') { throw "Guild snapshot mapping guard failed: scene GameObject name fallback returned." }
@@ -73,6 +99,8 @@ if (-not $memberNameMatch.Success) { throw "Guild snapshot mapping guard failed:
 if ($memberNameMatch.Value -match 'Convert\.ToString\(value\)') { throw "Guild snapshot mapping guard failed: unverified member-object ToString fallback returned." }
 if ($readerSource -notmatch 'Read\(string\s+verifiedPlayerName\)') { throw "Guild snapshot mapping guard failed: reader is not bound to verified character identity." }
 if ($pluginSource -notmatch 'private\s+void\s+UnloadCharacter\(\)[\s\S]*?_snapshot\s*=\s*null;') { throw "Guild lifecycle guard failed: character unload no longer clears guild snapshot." }
+if ($pluginSource -match 'else\s*\{\s*if\s*\(_characterKey\.Length\s*>\s*0\)\s*UnloadCharacter\(\)') { throw "Guild lifecycle guard failed: temporary gameplay-readiness loss unloads character state during zoning." }
+if ($pluginSource -notmatch 'ReleaseGuildActivityOwnership') { throw "Guild lifecycle guard failed: technical runtime ownership release path is missing." }
 if ($pluginSource -notmatch 'Instance\s*!=\s*null\s*&&\s*Instance\s*!=\s*this') { throw "Guild lifecycle guard failed: duplicate plugin initialization is not rejected." }
 Write-Host "PASS: Guild Life snapshot/lifecycle source guard"
 

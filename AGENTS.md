@@ -4,18 +4,18 @@ Instructions for AI/coding agents working in this repository. Read this before m
 
 ## What this mod is
 
-A read-only guild-presence and verified bulletin layer for Erenshor (native Lunaris plugin, .NET Framework 4.8, C# 5 effective language level via `csc`). It displays the player's native guild roster (and zone/level where the native data exposes it) and keeps a bounded local Guild Bulletin of verified events other mods report.
+A read-only native guild-presence layer plus a bounded, deterministic **mod-owned living-guild simulation** for Erenshor (native Lunaris plugin, .NET Framework 4.8, C# 5 effective language level via `csc`). It displays the player's native guild roster, keeps a verified-event Bulletin, and separately records deterministic Guild Life activities/events. The living-guild layer never grants or mutates native XP, items, resources, movement, guild rank, quests, raids, or other Erenshor state.
 
 ## Core design boundary
 
 - Guild Life is **read-only**. It does not create a guild, invite/kick members, alter rank, recruit Sims, start guild quests or raids, move/summon Sims, or send guild chat.
 - It does not mutate native guild/gameplay state or write any Erenshor save. Player-facing UI is retained Unity uGUI and uses no Harmony click/camera containment; UI behavior must never become a guild-management or gameplay hook.
 - Native guild objects are resolved through **reflection**, and the code must fail closed (not throw, not fabricate data) if a game update changes the expected shape. See `src/GuildReader.cs`.
-- The Bulletin only records events a caller already verified via `GuildLifeApi.PostVerifiedEvent(...)`. Guild Life does not infer that an event happened and does not parse prose to decide provenance — the caller owns that.
+- The **Bulletin** only records native roster observations or events a caller already verified via `GuildLifeApi.PostVerifiedEvent(...)`; it does not accept generated prose as provenance. The separate **Activity feed** may originate deterministic Guild Life simulation events because Guild Life itself owns that bounded mod state. These events must be labeled/treated as Guild Life activities, never as proof that Erenshor granted XP, loot, travel, combat wins, or other native outcomes.
 
 ## What Erenshor remains authoritative for
 
-Guild membership, rank, invites, recruitment, and all guild-management actions. This mod only reads and displays.
+Guild membership, rank, invites, recruitment, native progression/economy, movement, combat, quests, raids, and all guild-management actions. Guild Life reads those boundaries and may advance only its own explicitly labeled deterministic activity context.
 
 ## Forbidden
 

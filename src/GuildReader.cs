@@ -85,11 +85,17 @@ namespace ErenshorGuildLife
                     {
                         member.Zone = info.Zone;
                         member.Level = info.Level;
+                        member.StableId = info.StableId;
+                        member.TrackingResolved = info.StableId >= 0;
+                        member.GroupedWithPlayer = info.GroupedWithPlayer;
+                        member.KnownUnavailable = info.KnownUnavailable;
                     }
                     else
                     {
                         member.Zone = string.Empty;
                         member.Level = 0;
+                        member.StableId = -1;
+                        member.TrackingResolved = false;
                     }
                     result.Members.Add(member);
                 }
@@ -139,6 +145,13 @@ namespace ErenshorGuildLife
         {
             Dictionary<string, TrackingInfo> result =
                 new Dictionary<string, TrackingInfo>(StringComparer.OrdinalIgnoreCase);
+            // Native guild rosters currently expose member names while SimPlayerTracking exposes
+            // the stable simIndex. If two tracking records ever share a display name, fail closed
+            // instead of arbitrarily binding permanent Guild Life state to one of them.
+            HashSet<string> ambiguousNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<int> groupedIds = new HashSet<int>();
+            HashSet<string> groupedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            ReadCurrentGroupIdentity(groupedIds, groupedNames);
 
             object simManager = ReadStaticMember(_gameDataType, new string[] { "SimMngr", "SimManager" });
             IEnumerable sims = ReadMember(simManager, new string[] { "Sims" }) as IEnumerable;
@@ -153,9 +166,50 @@ namespace ErenshorGuildLife
                 TrackingInfo value = new TrackingInfo();
                 value.Zone = ReadString(tracking, new string[] { "CurScene", "CurrentScene", "Scene", "Zone" }, string.Empty);
                 value.Level = ReadInt(tracking, new string[] { "Level", "CurrentLevel", "SimLevel" }, 0);
+                // Current installed-source evidence (Follow assembly findings) establishes
+                // SimPlayerTracking.simIndex as the persistent Sim identity across zoning.
+                value.StableId = ReadInt(tracking, new string[] { "simIndex", "SimIndex" }, -1);
+                value.GroupedWithPlayer = (value.StableId >= 0 && groupedIds.Contains(value.StableId)) || groupedNames.Contains(name);
+                value.KnownUnavailable = ReadLoadedDeadState(tracking);
+
+                if (ambiguousNames.Contains(name)) continue;
+                TrackingInfo existing;
+                if (result.TryGetValue(name, out existing) && existing != null && existing.StableId != value.StableId)
+                {
+                    result.Remove(name);
+                    ambiguousNames.Add(name);
+                    continue;
+                }
                 result[name] = value;
             }
             return result;
+        }
+
+        private static void ReadCurrentGroupIdentity(HashSet<int> ids, HashSet<string> names)
+        {
+            object raw = ReadStaticMember(_gameDataType, new string[] { "GroupMembers" });
+            IEnumerable members = raw as IEnumerable;
+            if (members == null) return;
+            foreach (object tracking in members)
+            {
+                if (tracking == null) continue;
+                int id = ReadInt(tracking, new string[] { "simIndex", "SimIndex" }, -1);
+                if (id >= 0) ids.Add(id);
+                string name = ReadString(tracking, new string[] { "SimName", "Name" }, string.Empty);
+                if (!string.IsNullOrWhiteSpace(name)) names.Add(name);
+            }
+        }
+
+        private static bool ReadLoadedDeadState(object tracking)
+        {
+            object avatar = ReadMember(tracking, new string[] { "MyAvatar" });
+            if (avatar == null) return false;
+            object stats = ReadMember(avatar, new string[] { "MyStats" });
+            object character = ReadMember(stats, new string[] { "Myself" });
+            object rawAlive;
+            if (!TryReadMember(character, new string[] { "Alive" }, out rawAlive) || rawAlive == null) return false;
+            try { return !Convert.ToBoolean(rawAlive); }
+            catch { return false; }
         }
 
         private static List<string> ReadMemberNames(object guild, out bool resolved)
@@ -269,6 +323,9 @@ namespace ErenshorGuildLife
         {
             internal string Zone;
             internal int Level;
+            internal int StableId = -1;
+            internal bool GroupedWithPlayer;
+            internal bool KnownUnavailable;
         }
     }
 }

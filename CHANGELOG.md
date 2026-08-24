@@ -1,12 +1,25 @@
 # Changelog
 
+## Unreleased - living guild implementation
+
+- Added bounded reflection-friendly activity/relationship/opportunity APIs, including oldest-retained activity sequence for consumer gap detection.
+- Zoning/readiness loss now pauses native reads without falsely ending the already-verified character context; technical unload/character-switch cleanup releases runtime-only activity ownership silently.
+
+- Added a bounded deterministic living-guild scheduler using verified stable `SimPlayerTracking.simIndex` identities. Guild members can form small temporary activity groups for training, exploration, patrol, equipment practice, supply survey, and study without spawning, moving, or mutating native Sims.
+- Added deterministic completion outcomes, requests/opportunities, minor disputes, Guild Life accomplishments, mod-owned activity experience, and bounded relationship context. None of these writes native Erenshor XP/items/resources/progression.
+- Added the retained Activity tab with current activities, member Guild Life progression, requests, accomplishments, and recent persisted events. The verified Bulletin remains a separate provenance channel.
+- Added V2 per-character persistence for stable-id Guild Life progression, relationships, opportunities, and bounded activity history; runtime activity ownership/scheduling is intentionally not persisted. V1 bulletin files continue to load/migrate.
+- Added additive reflection-friendly `ActivityContractVersion = 1` APIs plus optional current-Journal Chronicle posting for meaningful deterministic events. No Deep Sims or Journal hard dependency was added.
+- Added deterministic coverage for scheduling, stable identity, party/dead exclusion, interruption, long-gap/no-catch-up behavior, persistence, and source authority/integration contracts.
+
+
 ## Unreleased - bounded Suite UI polish
 
 - Brought retained launcher drag, window-header drag, and the resize gesture up to the current Forgotten Roads standard: gestures are left-button only and claim native UI-drag ownership on **pointer-down** rather than at `OnBeginDrag`, so the first drag delta can no longer leak into the game camera. Ownership now releases on pointer-up, end-drag, loss of the physical left button, focus loss, pause, disable, destroy, and plugin unload.
 - Replaced the blind `GameData.DraggingUIElement = false` release with the shared process-local ownership registry used by the other suite modules. The first suite gesture captures the native baseline and the last owner restores it, so Guild Life can no longer clear a native or sibling mod's drag claim.
 - Added the narrow, fail-closed `CameraController.UsingUI()` containment postfix (monotonic `false -> true` only, and only while Guild Life owns a real pointer gesture). `[HarmonyPrepare]` proves the exact installed method/field/IL relationship before patching; an unrecognized game shape leaves native camera behavior unpatched. This adds the `Harmony` permission, documented in the README.
 - Narrowed the read-only authority test from "no Harmony patch anywhere" to "exactly one patch, and only the proven `CameraController.UsingUI` containment postfix"; prefix/transpiler/finalizer/reverse patches remain forbidden. Added deterministic gesture-lifecycle assertions and source guards for the pointer-down claim, left-button gating, physical/focus/pause release, and shared baseline restoration.
-- Guild authority is unchanged and still read-only: no invites, kicks, rank changes, recruitment, raid starting, movement, or invented guild events.
+- Guild native authority is unchanged and still read-only: no invites, kicks, rank changes, recruitment, raid starting, movement, or invented **native Erenshor** outcomes. The separate living-guild layer now owns only explicitly labeled mod-state events.
 - Aligned Guild Life and its launcher with the canonical dark/translucent/cyan Sim Actions palette and added a thin cyan frame.
 - Added a consistent `▾` / `▸` header collapse control. Collapsed Guild Life keeps only the draggable 32px header plus Reset/Close; roster/bulletin content and resize grip are hidden.
 - Collapse/expand preserves the header's screen position and clamps both states without changing the read-only guild authority boundary.

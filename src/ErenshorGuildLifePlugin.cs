@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using HarmonyLib;
 using Lunaris;
@@ -9,7 +10,7 @@ using UnityEngine.SceneManagement;
 namespace ErenshorGuildLife
 {
     [LunarisPlugin(PluginGuid, PluginVersion, "forgetwhtuno",
-        "Read-only guild-presence and verified bulletin layer. Erenshor remains authoritative for guild membership/state.")]
+        "Read-only native guild presence plus bounded deterministic Guild Life activities/events. Erenshor remains authoritative for real guild/game state.")]
     // Harmony/Reflection are used only for the narrow, fail-closed CameraController.UsingUI()
     // containment postfix (see GuildLifeCameraUiPatch). No gameplay, guild, combat, quest,
     // inventory, progression, or networking behavior is patched.
@@ -101,7 +102,7 @@ namespace ErenshorGuildLife
             Logging.LogInfo(
                 "Erenshor Guild Life " + PluginVersion +
                 " loaded. The retained GUILD LIFE launcher appears according to Suite fallback policy. " +
-                "No global hotkey is registered. Native guild state is read-only; this mod does not invite, kick, rank, recruit, or start guild quests/raids.");
+                "No global hotkey is registered. Native guild state is read-only; deterministic Living Guild activity is mod-owned and never invites, kicks, ranks, recruits, grants native rewards, or starts guild quests/raids.");
         }
 
         private static bool IsLocalCharacterReady()
@@ -151,6 +152,7 @@ namespace ErenshorGuildLife
 
             if (_characterKey.Length > 0)
             {
+                ReleaseGuildActivityOwnership();
                 SaveNow();
                 if (_open) CloseWindow();
             }
@@ -182,6 +184,7 @@ namespace ErenshorGuildLife
 
         private void UnloadCharacter()
         {
+            ReleaseGuildActivityOwnership();
             SaveNow();
             if (_open) CloseWindow();
             _snapshot = null;
@@ -232,7 +235,12 @@ namespace ErenshorGuildLife
                 if (ready) EnsureCharacter();
                 else
                 {
-                    if (_characterKey.Length > 0) UnloadCharacter();
+                    // Zoning/character-select readiness loss is a temporary native lifecycle boundary,
+                    // not evidence that the character identity or its abstract guild activity vanished.
+                    // Keep the character-scoped document in memory, stop touching native state, and
+                    // close retained UI so cursor/input ownership is clean. A genuinely different
+                    // character is resolved after gameplay becomes ready again.
+                    if (_open) CloseWindow();
                     SuiteDragHandler.ForceReleaseIfOwned();
                 }
 
@@ -280,6 +288,7 @@ namespace ErenshorGuildLife
             _initialized = false;
             try { if (_auraProvider != null) _auraProvider.Unregister(); } catch { }
             _auraProvider = null;
+            try { ReleaseGuildActivityOwnership(); } catch { }
             try { SaveNow(); } catch { }
             try { SuiteDragHandler.ForceReleaseIfOwned(); } catch { }
             try { GuildLifeApi.ClearPending(); } catch { }
@@ -305,6 +314,8 @@ namespace ErenshorGuildLife
             GuildSnapshot current = GuildReader.Read(PlayerName());
             _snapshot = current;
 
+            TickGuildActivities(current);
+
             if (initial || previous == null || _recordRosterChanges == null || !_recordRosterChanges.Value || _document == null) return;
 
             GuildRosterDelta delta = GuildLifeCore.DiffRosters(previous, current);
@@ -319,6 +330,56 @@ namespace ErenshorGuildLife
                 if (GuildLifeCore.AppendBulletin(_document, DateTime.UtcNow, "Erenshor", "Roster", delta.Left[i],
                     delta.Left[i] + " left the guild roster."))
                     MarkDirty();
+            }
+        }
+
+        private void TickGuildActivities(GuildSnapshot current)
+        {
+            if (_document == null || _settings == null) return;
+            if (!_settings.LivingGuildEnabled)
+            {
+                if (_document.CurrentActivities.Count > 0) StopGuildActivities("living guild disabled");
+                return;
+            }
+            if (current != null && current.RuntimeAvailable && !current.InGuild)
+            {
+                if (_document.CurrentActivities.Count > 0) StopGuildActivities("native guild membership ended");
+                return;
+            }
+            List<GuildActivityEvent> emitted;
+            bool changed = GuildActivityEngine.Tick(_document, current, DateTime.UtcNow, _characterKey,
+                Mathf.Clamp(_settings.ActivityIntervalSeconds, 30, 600), Mathf.Clamp(_settings.MaxConcurrentActivities, 1, 4), out emitted);
+            if (emitted != null && emitted.Count > 0) HandleActivityEvents(emitted);
+            if (changed) MarkDirty();
+        }
+
+        private void ReleaseGuildActivityOwnership()
+        {
+            if (_document == null) return;
+            // CurrentActivities/NextActivityUtc are explicitly runtime-only. Technical lifecycle
+            // cleanup (hot unload/character switch) must not create fake in-world interruption news.
+            GuildActivityEngine.ReleaseRuntimeOwnership(_document);
+        }
+
+        private void StopGuildActivities(string reason)
+        {
+            if (_document == null) return;
+            List<GuildActivityEvent> emitted;
+            if (!GuildActivityEngine.StopAll(_document, DateTime.UtcNow, reason, out emitted)) return;
+            HandleActivityEvents(emitted);
+            MarkDirty();
+        }
+
+        private void HandleActivityEvents(List<GuildActivityEvent> events)
+        {
+            if (events == null) return;
+            // Living-guild simulation has its own persisted Activity feed. Keep the Bulletin's
+            // provenance contract intact: it remains reserved for native roster observations and
+            // facts explicitly verified by external callers through GuildLifeApi.PostVerifiedEvent.
+            for (int i = 0; i < events.Count; i++)
+            {
+                GuildActivityEvent evt = events[i];
+                if (evt != null && evt.Meaningful) OptionalJournalBridge.TryPost(evt);
             }
         }
 

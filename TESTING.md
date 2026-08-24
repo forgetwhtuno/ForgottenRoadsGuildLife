@@ -1,6 +1,6 @@
-# Erenshor Guild Life 0.1.2 - release-readiness checklist
+# Erenshor Guild Life 0.1.3 — live-test checklist
 
-## Automated deterministic tests
+## Automated/source tests
 
 Run:
 
@@ -8,86 +8,73 @@ Run:
 powershell -ExecutionPolicy Bypass -File .\RUN_TESTS.ps1
 ```
 
-Coverage includes roster diff/identity boundaries, no-guild behavior, bulletin bounds/dedupe/persistence/recovery, character keys, one-time legacy claim, launcher geometry, Suite launcher policy, and a source-level read-only authority check.
+Expected coverage includes roster identity/diff boundaries, no-guild behavior, Bulletin bounds/dedupe/persistence/recovery, stable living-guild selection/transitions, grouped/unavailable exclusion, temporary tracking loss, long-gap/no-catch-up behavior, V1->V2 persistence, retained UI ownership, read-only native authority, and optional-integration contracts.
 
-## Build
+## Native build
 
-- [ ] `RUN_TESTS.ps1` reports PASS.
-- [ ] `BUILD_AND_INSTALL.ps1` compiles against the current installed Erenshor `Assembly-CSharp.dll`, Unity assemblies, and Lunaris developer reference, then installs only `ErenshorGuildLife.dll`.
-- [ ] No Harmony patch or network permission is introduced.
+- [ ] `RUN_TESTS.ps1` reports all PASS.
+- [ ] `BUILD_AND_INSTALL.ps1` compiles against the current installed `Assembly-CSharp.dll`, Unity assemblies, and Lunaris references.
+- [ ] Only `ErenshorGuildLife.dll` is installed; no game assembly or save is modified.
+- [ ] Lunaris loads version `0.1.3` without missing-member exceptions.
 
-## UI
+## Native roster / stable identity
 
-- [ ] Expanded Guild Life header shows `▾`; collapse leaves only the ~32px draggable header with Reset and `X`, and `▸` expands back to the prior Roster/Bulletin content.
-- [ ] While collapsed, no roster/bulletin body or resize grip renders or accepts input.
-- [ ] Drag while collapsed near each screen edge, expand, and confirm the restored window is still clamped on-screen.
-- [ ] Roster level/zone text updates retained row controls without reconstructing the roster when membership structure is unchanged.
-- [ ] Repeated collapse/expand and hot reload do not create duplicate Canvas/EventSystem roots.
+- [ ] In a guild, the correct native guild roster appears.
+- [ ] Zone/level are shown only when current tracking exposes them; missing data remains unknown.
+- [ ] Activity ownership follows the same Sim across a zone/runtime-avatar replacement when `simIndex` remains stable.
+- [ ] A temporarily missing `MyAvatar` does not mark the member dead/unavailable.
+- [ ] A positively loaded dead Sim is not admitted to a new Guild Life activity.
+- [ ] A guild member who joins the player's current party is not assigned off-screen Guild Life activity; an already-running activity involving that member is interrupted.
+- [ ] Leaving/changing the native guild does not carry living-guild state into the new guild.
 
+## Living-guild loop
 
-- [ ] `GUILD LIFE` launcher appears in ordinary gameplay according to Suite fallback policy.
-- [ ] No F-key/global hotkey is registered.
-- [ ] Launcher and main window drag correctly and retain position.
-- [ ] Main window resizes with the lower-right grip.
-- [ ] At small resolutions the panel shrinks/clamps onscreen rather than overflowing the display.
-- [ ] Roster and Bulletin scroll independently where needed; no large blank regions or clipped controls appear.
-- [ ] Bulletin Clear is disabled when empty and requires a second confirmation click when populated.
-- [ ] Normal player UI contains no reflection diagnostics, PoC/debug labels, or fake action controls.
+- [ ] With `LivingGuildEnabled=true`, the first Activity appears shortly after a valid guild context is ready.
+- [ ] At most `MaxConcurrentActivities` are active.
+- [ ] Activity participants/types/end times remain stable while viewing the panel; opening/closing the UI does not reroll them.
+- [ ] Completed activities produce deterministic Activity-feed entries and update only **Guild Life** XP/completion/setback/relationship/accomplishment state.
+- [ ] Requests/opportunities appear when generated, remain discoverable, expire deterministically, and stay within the configured bounded list.
+- [ ] Wait long enough for several activities and confirm there is no chat-frame spam or rapid runaway generation.
+- [ ] Simulate a long pause/reload and confirm Guild Life does not replay hundreds of missed activities; scheduling resumes from current time.
+- [ ] No Sim is spawned, teleported, pathed, animated, made to attack/heal, or granted native items/XP/resources by the activity system.
 
-## Native roster / no-guild state
+## Retained UI
 
-While in a guild:
-- [ ] Roster resolves the correct guild and member names against Erenshor's Guild Manager.
-- [ ] Native guild ID/name changes do not cause cross-guild roster deltas.
-- [ ] Zone/level are shown only when native tracking exposes them; missing values remain unknown rather than guessed.
-- [ ] Panel clearly states that guild actions remain in Erenshor's Guild Manager.
+- [ ] Roster, Bulletin, and Activity tabs all render in the existing retained panel.
+- [ ] Roster rows show the member's current Guild Life activity where applicable.
+- [ ] Activity tab shows current activities, opportunities, accomplishments/member progress, and recent events without looking like a debug console.
+- [ ] Bulletin remains a separate provenance surface; Guild Life activity events are not silently copied into it.
+- [ ] Collapse/expand, drag, resize, close/reset, screen clamping, and Suite fallback launcher behavior still work.
+- [ ] No duplicate Canvas/EventSystem roots appear after Lunaris disable/enable/hot reload.
 
-While not in a guild:
-- [ ] UI clearly says `NO GUILD FOUND`.
-- [ ] No other guild is selected merely because Sims belong to it.
+## Persistence / character switching
 
-During startup/zoning:
-- [ ] Missing/null Guild Manager or Guilds collection produces the temporary unavailable state, not a false proven no-guild state and not an exception.
-- [ ] If a guild object exists but its member collection cannot be read, the panel stays temporarily unavailable rather than reporting `NO GUILD FOUND`.
-- [ ] Roster recovers on a later refresh when native state becomes available.
-- [ ] No active character means no per-character bulletin is loaded or created.
+- [ ] Character A and Character B use separate sidecar state.
+- [ ] V1 Bulletin data loads and is migrated to V2 without losing readable history.
+- [ ] V2 retains stable-id member Guild Life progression, relationships, opportunities, accomplishments, and bounded Activity event history.
+- [ ] Active runtime activities do **not** survive save/load as stuck ownership; a fresh schedule is reconstructed.
+- [ ] Character switch/unload/plugin disable emits cleanup and leaves no current activity ownership.
+- [ ] Malformed individual records are skipped; a fully invalid file is backed up as `.corrupt-*` and fails safely.
 
-## Roster-change bulletin
+## Optional integrations
 
-- [ ] With `RecordRosterChanges=true`, a real same-guild roster join is recorded once.
-- [ ] A real same-guild roster departure is recorded once.
-- [ ] Switching guild identity does not fabricate every old member as leaving and every new member as joining.
-- [ ] Reloading the mod starts from the current roster baseline and does not invent changes.
-- [ ] Bulletin remains bounded to 200 entries.
+With Deep Sims absent:
+- [ ] Everything above still works; no missing-type/startup error occurs.
 
-## External bulletin API / character isolation
+With current Deep Sims installed:
+- [ ] Guild Life still loads independently; no loader-order requirement appears.
+- [ ] Existing Deep Sims behavior remains unaffected until it explicitly consumes the additive Guild Life Activity API.
 
-- [ ] `GuildLifeApi.PostVerifiedEvent` works through optional reflection when a character context is active.
-- [ ] Exact repeats inside the short duplicate window are suppressed.
-- [ ] Oversized or control-character payloads are sanitized/bounded.
-- [ ] Queue an event immediately before switching characters and verify it never appears in the newly active character's bulletin.
-- [ ] Character A and B retain separate bulletin histories under `plugins/config/ErenshorGuildLife/Characters/<character-key>/bulletin.dat`.
-- [ ] Clearing the bulletin never touches native guild state.
+With Journal absent:
+- [ ] Meaningful activity events remain visible in Guild Life and no error/spam occurs.
 
-## Persistence / malformed state
+With current Journal installed:
+- [ ] Only meaningful Guild Life activity events can create Chronicle entries.
+- [ ] Routine start/stop/expiry noise does not flood Chronicle.
+- [ ] Reprocessing the same deterministic event ID does not duplicate the Chronicle event.
 
-- [ ] Save twice and verify the main bulletin remains readable and `.bak` is maintained.
-- [ ] One malformed record in an otherwise valid file is skipped while readable history survives.
-- [ ] A fully invalid file is preserved as `.corrupt-*` and Guild Life opens with an empty local bulletin.
-- [ ] Legacy global bulletin data can be claimed once without overwriting existing per-character data or leaking to later characters.
+## Read-only native boundary
 
-## Suite launcher contract
-
-- [ ] Hub absent/unusable: recovery launcher remains visible while a character is active.
-- [ ] Hub healthy + Guild Life bridge registered + `Show Guild Life Launcher` OFF: standalone launcher is hidden.
-- [ ] Toggling `Show Guild Life Launcher` in MODS updates immediately.
-- [ ] `Open Guild Life` opens the dedicated panel and status stays concise.
-- [ ] Reset panel/launcher actions remain available without adding a second settings framework.
-
-## Read-only safety boundary
-
-- [ ] No invite, kick, rank, recruit, create/leave, guild-quest, raid-start, summon, movement, chat, or save-file mutation is performed by Guild Life.
-- [ ] Native guild state is only reflected/read.
-- [ ] No networking or AI-generated guild facts are added.
-- [ ] Lunaris unload/reload leaves no duplicate retained UI, stale drag state, pending bulletin event, or stale guild snapshot.
-- [ ] If duplicate plugin initialization is forced in a development session, the extra instance is ignored and does not create another canvas/launcher.
+- [ ] No invite/kick/rank/recruit/create/leave/guild-quest/raid-start operation is performed.
+- [ ] No native Sim progression, inventory, money, faction, combat, movement, AI, or Erenshor save state is mutated.
+- [ ] The only Harmony patch remains the proven `CameraController.UsingUI()` retained-UI containment postfix.

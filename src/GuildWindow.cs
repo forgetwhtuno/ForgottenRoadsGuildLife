@@ -16,10 +16,12 @@ namespace ErenshorGuildLife
         {
             internal TextMeshProUGUI Level;
             internal TextMeshProUGUI Zone;
+            internal TextMeshProUGUI Activity;
         }
 
         private const int TabRoster = 0;
         private const int TabBulletin = 1;
+        private const int TabActivity = 2;
         private int _tab;
 
         private GameObject _root;
@@ -31,13 +33,17 @@ namespace ErenshorGuildLife
         private float _expandedHeight;
         private RectTransform _rosterRoot;
         private RectTransform _bulletinRoot;
+        private RectTransform _activityRoot;
         private RectTransform _rosterContent;
         private RectTransform _bulletinContent;
+        private RectTransform _activityContent;
         private TextMeshProUGUI _rosterHeading;
         private TextMeshProUGUI _rosterHint;
         private TextMeshProUGUI _bulletinHeading;
+        private TextMeshProUGUI _activityHeading;
         private Button _rosterTab;
         private Button _bulletinTab;
+        private Button _activityTab;
         private Button _clearButton;
         private TextMeshProUGUI _clearLabel;
         private RetainedPosition _position;
@@ -48,6 +54,7 @@ namespace ErenshorGuildLife
         private readonly Dictionary<string, MemberRowUi> _memberRows =
             new Dictionary<string, MemberRowUi>(StringComparer.OrdinalIgnoreCase);
         private int _bulletinCount = -1;
+        private string _activitySignature = string.Empty;
         private float _clearArmedUntil;
 
         internal void Initialize(float storedX, float storedY, float width, float height,
@@ -72,6 +79,7 @@ namespace ErenshorGuildLife
             BuildTabs();
             BuildRoster();
             BuildBulletin();
+            BuildActivity();
             _position = new RetainedPosition(storedX, storedY, 0.5f, 0.5f, persist);
             _position.Resolve(_panel);
             SuiteResizeHandler resize = RetainedUiKit.AddResizeGrip("ResizeGrip", _panel, _panel, 16f, new Vector2(MinimumWidth, MinimumHeight),
@@ -112,6 +120,7 @@ namespace ErenshorGuildLife
             row.offsetMin = new Vector2(10f, -66f); row.offsetMax = new Vector2(-10f, -35f);
             _rosterTab = AddAbsoluteButton(row, "Roster", "Roster", 0f, 92f, delegate { SetTab(TabRoster); });
             _bulletinTab = AddAbsoluteButton(row, "Bulletin", "Bulletin", 98f, 92f, delegate { SetTab(TabBulletin); });
+            _activityTab = AddAbsoluteButton(row, "Activity", "Activity", 196f, 92f, delegate { SetTab(TabActivity); });
         }
 
         private void BuildRoster()
@@ -167,6 +176,30 @@ namespace ErenshorGuildLife
             scroll.content = _bulletinContent;
         }
 
+        private void BuildActivity()
+        {
+            _activityRoot = RetainedUiKit.CreateRect("ActivityView", _bodyRoot);
+            _activityRoot.anchorMin = Vector2.zero; _activityRoot.anchorMax = Vector2.one;
+            _activityRoot.offsetMin = new Vector2(10f, 10f); _activityRoot.offsetMax = new Vector2(-10f, -70f);
+
+            _activityHeading = RetainedUiKit.AddLabel("Heading", _activityRoot, "LIVING GUILD", 12f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+            _activityHeading.rectTransform.anchorMin = new Vector2(0f, 1f); _activityHeading.rectTransform.anchorMax = new Vector2(1f, 1f);
+            _activityHeading.rectTransform.pivot = new Vector2(0.5f, 1f); _activityHeading.rectTransform.offsetMin = new Vector2(0f, -28f); _activityHeading.rectTransform.offsetMax = Vector2.zero;
+
+            TextMeshProUGUI hint = RetainedUiKit.AddLabel("Hint", _activityRoot,
+                "Deterministic Guild Life activity. This does not grant native XP/items/resources or move Sims.", 10f, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+            hint.color = RetainedUiKit.Muted;
+            hint.rectTransform.anchorMin = new Vector2(0f, 1f); hint.rectTransform.anchorMax = new Vector2(1f, 1f);
+            hint.rectTransform.pivot = new Vector2(0.5f, 1f); hint.rectTransform.offsetMin = new Vector2(0f, -58f); hint.rectTransform.offsetMax = new Vector2(0f, -32f);
+
+            RectTransform viewport; RectTransform raw;
+            ScrollRect scroll = RetainedUiKit.AddScrollRect("ActivityScroll", _activityRoot, false, true, out viewport, out raw);
+            RectTransform sr = scroll.GetComponent<RectTransform>();
+            sr.anchorMin = Vector2.zero; sr.anchorMax = Vector2.one; sr.offsetMin = Vector2.zero; sr.offsetMax = new Vector2(0f, -62f);
+            _activityContent = RetainedUiKit.AddVerticalContent("ActivityRows", viewport, 6f, 2);
+            scroll.content = _activityContent;
+        }
+
         internal void Tick(bool visible, GuildSnapshot snapshot, GuildLifeDocument document, Action clearBulletin)
         {
             if (_root == null) return;
@@ -198,6 +231,12 @@ namespace ErenshorGuildLife
                 _bulletinCount = count;
                 RebuildBulletinRows();
             }
+            string activitySig = BuildActivitySignature();
+            if (!string.Equals(_activitySignature, activitySig, StringComparison.Ordinal))
+            {
+                _activitySignature = activitySig;
+                RebuildActivityRows();
+            }
             bool canClear = count > 0;
             if (_clearButton != null) _clearButton.interactable = canClear;
             if (!canClear) _clearArmedUntil = 0f;
@@ -211,6 +250,7 @@ namespace ErenshorGuildLife
             _rosterSignature = string.Empty;
             _memberRows.Clear();
             _bulletinCount = -1;
+            _activitySignature = string.Empty;
             _clearArmedUntil = 0f;
         }
 
@@ -222,15 +262,15 @@ namespace ErenshorGuildLife
             RetainedUiKit.DestroyRoot(ref _root);
             _panel = null; _bodyRoot = null; _collapseChevron = null; _resizeGripRoot = null;
             _collapsed = false; _expandedHeight = 0f;
-            _rosterRoot = null; _bulletinRoot = null; _rosterContent = null; _bulletinContent = null;
+            _rosterRoot = null; _bulletinRoot = null; _activityRoot = null; _rosterContent = null; _bulletinContent = null; _activityContent = null;
             _position = null; _snapshot = null; _document = null; _clearBulletin = null;
             _clearButton = null; _clearLabel = null;
-            _rosterSignature = string.Empty; _memberRows.Clear(); _bulletinCount = -1; _clearArmedUntil = 0f;
+            _rosterSignature = string.Empty; _memberRows.Clear(); _bulletinCount = -1; _activitySignature = string.Empty; _clearArmedUntil = 0f;
         }
 
         private void SetTab(int tab)
         {
-            int next = tab == TabBulletin ? TabBulletin : TabRoster;
+            int next = tab == TabBulletin ? TabBulletin : (tab == TabActivity ? TabActivity : TabRoster);
             if (next != _tab) _clearArmedUntil = 0f;
             _tab = next;
             UpdateTabAppearance();
@@ -240,8 +280,10 @@ namespace ErenshorGuildLife
         {
             if (_rosterRoot != null) _rosterRoot.gameObject.SetActive(_tab == TabRoster);
             if (_bulletinRoot != null) _bulletinRoot.gameObject.SetActive(_tab == TabBulletin);
+            if (_activityRoot != null) _activityRoot.gameObject.SetActive(_tab == TabActivity);
             SetSelected(_rosterTab, _tab == TabRoster);
             SetSelected(_bulletinTab, _tab == TabBulletin);
+            SetSelected(_activityTab, _tab == TabActivity);
         }
 
         private string BuildRosterSignature()
@@ -292,9 +334,13 @@ namespace ErenshorGuildLife
                 TextMeshProUGUI zone = RetainedUiKit.AddLabel("Zone", row,
                     string.IsNullOrWhiteSpace(member.Zone) ? "location unknown" : member.Zone, 10f, FontStyles.Normal, TextAlignmentOptions.MidlineRight);
                 zone.color = RetainedUiKit.Muted;
-                LayoutElement zl = zone.gameObject.AddComponent<LayoutElement>(); zl.preferredWidth = 170f; zl.preferredHeight = 25f;
+                LayoutElement zl = zone.gameObject.AddComponent<LayoutElement>(); zl.preferredWidth = 140f; zl.preferredHeight = 25f;
+                string activityText = MemberActivityText(member);
+                TextMeshProUGUI activity = RetainedUiKit.AddLabel("Activity", row, activityText, 10f, FontStyles.Normal, TextAlignmentOptions.MidlineRight);
+                activity.color = activityText.Length > 0 ? RetainedUiKit.Text : RetainedUiKit.Muted;
+                LayoutElement al = activity.gameObject.AddComponent<LayoutElement>(); al.preferredWidth = 132f; al.preferredHeight = 25f;
                 if (!string.IsNullOrWhiteSpace(member.Name))
-                    _memberRows[member.Name] = new MemberRowUi { Level = level, Zone = zone };
+                    _memberRows[member.Name] = new MemberRowUi { Level = level, Zone = zone, Activity = activity };
             }
             LayoutRebuilder.ForceRebuildLayoutImmediate(_rosterContent);
         }
@@ -312,6 +358,12 @@ namespace ErenshorGuildLife
                 string zone = string.IsNullOrWhiteSpace(member.Zone) ? "location unknown" : member.Zone;
                 if (row.Level != null && !string.Equals(row.Level.text, level, StringComparison.Ordinal)) row.Level.text = level;
                 if (row.Zone != null && !string.Equals(row.Zone.text, zone, StringComparison.Ordinal)) row.Zone.text = zone;
+                string activity = MemberActivityText(member);
+                if (row.Activity != null && !string.Equals(row.Activity.text, activity, StringComparison.Ordinal))
+                {
+                    row.Activity.text = activity;
+                    row.Activity.color = activity.Length > 0 ? RetainedUiKit.Text : RetainedUiKit.Muted;
+                }
             }
         }
 
@@ -339,6 +391,116 @@ namespace ErenshorGuildLife
                 AddBulletinLabel(prefix + Environment.NewLine + (value.Text ?? string.Empty), false);
             }
             LayoutRebuilder.ForceRebuildLayoutImmediate(_bulletinContent);
+        }
+
+        private string BuildActivitySignature()
+        {
+            if (_document == null) return "null";
+            StringBuilder sb = new StringBuilder();
+            sb.Append(_document.ActiveGuildKey).Append('|').Append(_document.GuildAccomplishments).Append('|')
+              .Append(_document.CurrentActivities.Count).Append('|').Append(_document.Opportunities.Count).Append('|')
+              .Append(_document.ActivityEvents.Count).Append('|').Append(_document.Relationships.Count);
+            for (int i = 0; i < _document.CurrentActivities.Count; i++)
+            {
+                GuildActivityRecord a = _document.CurrentActivities[i];
+                if (a != null) sb.Append('|').Append(a.ActivityId).Append('|').Append((int)a.Type).Append('|').Append(a.EndsUtc.Ticks);
+            }
+            return sb.ToString();
+        }
+
+        private void RebuildActivityRows()
+        {
+            if (_activityContent == null) return;
+            RetainedUiKit.ClearChildren(_activityContent);
+            int active = _document == null ? 0 : _document.CurrentActivities.Count;
+            int open = _document == null ? 0 : _document.Opportunities.Count;
+            int accomplishments = _document == null ? 0 : _document.GuildAccomplishments;
+            if (_activityHeading != null) _activityHeading.text = "LIVING GUILD  —  " + active.ToString() + " active  |  " + open.ToString() + " requests  |  " + accomplishments.ToString() + " accomplishments";
+            if (_document == null) return;
+
+            if (active == 0) AddActivityLabel("No member activity is active right now. New work is scheduled on a bounded cadence.", true);
+            else
+            {
+                AddActivityLabel("CURRENT ACTIVITY", true);
+                for (int i = 0; i < _document.CurrentActivities.Count; i++)
+                {
+                    GuildActivityRecord value = _document.CurrentActivities[i];
+                    if (value == null) continue;
+                    AddActivityLabel(GuildActivityEngine.DescribeParticipants(value.ParticipantNames) + " — " + GuildActivityEngine.DescribeType(value.Type) +
+                        " — until " + value.EndsUtc.ToLocalTime().ToString("HH:mm:ss"), false);
+                }
+            }
+
+            if (_document.Opportunities.Count > 0)
+            {
+                AddActivityLabel("REQUESTS / OPPORTUNITIES", true);
+                for (int i = 0; i < _document.Opportunities.Count; i++)
+                {
+                    GuildOpportunity value = _document.Opportunities[i];
+                    if (value == null || value.Resolved) continue;
+                    AddActivityLabel((value.Title ?? "Guild request") + " — expires " + value.ExpiresUtc.ToLocalTime().ToString("HH:mm") + Environment.NewLine + (value.Detail ?? string.Empty), false);
+                }
+            }
+
+            if (_document.MemberStates.Count > 0)
+            {
+                AddActivityLabel("MEMBER GUILD LIFE PROGRESS", true);
+                int shown = 0;
+                for (int i = _document.MemberStates.Count - 1; i >= 0 && shown < 8; i--)
+                {
+                    GuildMemberLifeState value = _document.MemberStates[i];
+                    if (value == null) continue;
+                    AddActivityLabel((value.LastKnownName ?? ("Sim #" + value.StableId.ToString())) + " — GL XP " + value.ActivityExperience.ToString() +
+                        " — completed " + value.CompletedActivities.ToString() + " — setbacks " + value.Setbacks.ToString(), false);
+                    shown++;
+                }
+            }
+
+            if (_document.Relationships.Count > 0)
+            {
+                AddActivityLabel("RELATIONSHIPS", true);
+                int startRelationship = Math.Max(0, _document.Relationships.Count - 6);
+                for (int i = startRelationship; i < _document.Relationships.Count; i++)
+                {
+                    GuildRelationshipState value = _document.Relationships[i];
+                    if (value == null) continue;
+                    AddActivityLabel(GuildActivityEngine.NameForStableId(_document, value.FirstStableId) + " / " +
+                        GuildActivityEngine.NameForStableId(_document, value.SecondStableId) + " — rapport " + value.Rapport.ToString() +
+                        " — shared " + value.SharedActivities.ToString() + " — disputes " + value.Disputes.ToString(), false);
+                }
+            }
+
+            if (_document.ActivityEvents.Count > 0)
+            {
+                AddActivityLabel("RECENT ACTIVITY", true);
+                int start = Math.Max(0, _document.ActivityEvents.Count - 12);
+                for (int i = start; i < _document.ActivityEvents.Count; i++)
+                {
+                    GuildActivityEvent evt = _document.ActivityEvents[i];
+                    if (evt == null) continue;
+                    AddActivityLabel(evt.Utc.ToLocalTime().ToString("HH:mm") + " — " + (evt.Detail ?? string.Empty), false);
+                }
+            }
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_activityContent);
+        }
+
+        private void AddActivityLabel(string value, bool muted)
+        {
+            TextMeshProUGUI label = RetainedUiKit.AddLabel("ActivityEntry", _activityContent, value, 10.5f, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+            if (muted) label.color = RetainedUiKit.Muted;
+            LayoutElement le = label.gameObject.AddComponent<LayoutElement>();
+            le.minHeight = 25f; le.preferredHeight = Mathf.Max(25f, label.preferredHeight + 6f);
+        }
+
+        private string MemberActivityText(GuildMemberSnapshot member)
+        {
+            if (member == null) return string.Empty;
+            if (_snapshot != null && string.Equals(member.Name, _snapshot.PlayerName, StringComparison.OrdinalIgnoreCase)) return "You";
+            if (member.GroupedWithPlayer) return "With your party";
+            if (member.KnownUnavailable) return "Unavailable";
+            if (member.StableId < 0) return "Tracking unavailable";
+            string activity = GuildActivityEngine.CurrentActivityFor(_document, member.StableId);
+            return activity.Length > 0 ? activity : "Available";
         }
 
         private void ClearBulletin()
